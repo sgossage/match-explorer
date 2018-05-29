@@ -94,7 +94,7 @@ def getxyz(x, y, z, lim=[-99, 99] ,limz=[-99,99]):
 
 def getdata(feh_val, vvc_val, bf_val, av_val, age_val):
 
-    if vvc_val == 'gauss':
+    if isinstance(vvc_val, str):
         d = np.genfromtxt(glob.glob("models/bf{:.2f}_av{:.1f}_SFR0.0001_"\
                                     "t{:.1f}_{:.2f}_logZ{:.2f}_vvc{:s}_"\
                                     "{:s}.phot".format(bf_val, av_val, age_val,
@@ -123,12 +123,21 @@ def get_mag_mass(feh, vvc, bf, av, lage, limz=[0.1,8.0]):
 
     return {'v':d[0], 'i':d[1], 'imass':d[2]}, {'v':dfull[0], 'i':dfull[1], 'imass':dfull[2]}
 
-def mass_colors(initm):
+def mass_colors(initm, model):
     # returns a list of rgb colors, used to help delineate initial masses:
     # (uses Spectral color map at the moment.)
-    colors = ["#%02x%02x%02x" % (int(r), int(g), int(b)) \
-              for r, g, b, _ in 255* \
-              mpl.cm.Spectral(mpl.colors.Normalize()(initm))]
+    if model == 'single':
+        colors = ["#%02x%02x%02x" % (int(r), int(g), int(b)) \
+                  for r, g, b, _ in 255* \
+                  mpl.cm.Reds(mpl.colors.Normalize()(initm))]
+    elif model == 'gauss':
+        colors = ["#%02x%02x%02x" % (int(r), int(g), int(b)) \
+                  for r, g, b, _ in 255* \
+                  mpl.cm.Blues(mpl.colors.Normalize()(initm))]
+    elif model == 'flat':
+        colors = ["#%02x%02x%02x" % (int(r), int(g), int(b)) \
+                  for r, g, b, _ in 255* \
+                  mpl.cm.Purples(mpl.colors.Normalize()(initm))]
 
     return colors
 
@@ -140,6 +149,7 @@ def mass_colors(initm):
 data = get_mag_mass(-0.30, 0.0, 0.0, 0.0, 8.9)
 # for the Gaussian dist. model:
 gdata = get_mag_mass(-0.30, 'gauss', 0.0, 0.0, 8.9)
+fldata = get_mag_mass(-0.30, 'flat', 0.0, 0.0, 8.9)
 
 # Set up plots...
 plot_CMD = figure(plot_height=800, plot_width=600,
@@ -154,15 +164,21 @@ plot_CMD.ygrid.visible = False
 
 # data for single vvc model:
 source = ColumnDataSource(data=dict(x=data[0]['v']-data[0]['i'], y=data[0]['i'], 
-                                    alpha=[0.6]*len(data[0]['i']), c=mass_colors(data[0]['imass'])))
-# full data (never but via initial mass):
+                                    alpha=[0.6]*len(data[0]['i']), c=mass_colors(data[0]['imass'], 'single')))
+# full data (i.e., this cannot be cut via initial mass):
 fsource = ColumnDataSource(data=dict(x=data[1]['v']-data[1]['i'], y=data[1]['i'], 
-                                      alpha=[0.6]*len(data[1]['i']), c=mass_colors(data[1]['imass'])))
+                                      alpha=[0.6]*len(data[1]['i']), c=mass_colors(data[1]['imass'], 'single')))
 # same, but for Gaussian model:
 gsource = ColumnDataSource(data=dict(x=gdata[0]['v']-gdata[0]['i'], y=gdata[0]['i'], 
-                                     alpha=[0.0]*len(gdata[0]['i']), c=mass_colors(gdata[0]['imass'])))
+                                     alpha=[0.0]*len(gdata[0]['i']), c=mass_colors(gdata[0]['imass'], 'gauss')))
 gfsource = ColumnDataSource(data=dict(x=gdata[1]['v']-gdata[1]['i'], y=gdata[1]['i'], 
-                                      alpha=[0.0]*len(gdata[1]['i']), c=mass_colors(gdata[1]['imass'])))
+                                      alpha=[0.0]*len(gdata[1]['i']), c=mass_colors(gdata[1]['imass'], 'gauss')))
+
+# same, but for Flat model:
+flsource = ColumnDataSource(data=dict(x=fldata[0]['v']-fldata[0]['i'], y=fldata[0]['i'], 
+                                     alpha=[0.0]*len(fldata[0]['i']), c=mass_colors(fldata[0]['imass'], 'flat')))
+flfsource = ColumnDataSource(data=dict(x=fldata[1]['v']-fldata[1]['i'], y=fldata[1]['i'], 
+                                      alpha=[0.0]*len(fldata[1]['i']), c=mass_colors(fldata[1]['imass'], 'flat')))
 
 #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # Now actually plot data:
@@ -177,6 +193,9 @@ plot_CMD.scatter('x', 'y', source=fsource, line_color=None, fill_alpha='alpha', 
 
 plot_CMD.scatter('x', 'y', source=gsource, line_color=None, fill_alpha='alpha', fill_color='c')
 plot_CMD.scatter('x', 'y', source=gfsource, line_color=None, fill_alpha='alpha', fill_color='c')
+
+plot_CMD.scatter('x', 'y', source=flsource, line_color=None, fill_alpha='alpha', fill_color='c')
+plot_CMD.scatter('x', 'y', source=flfsource, line_color=None, fill_alpha='alpha', fill_color='c')
 
 # x, y axis labels:
 plot_CMD.xaxis.axis_label = x_label
@@ -199,6 +218,7 @@ av = Slider(title=r"Extinction", value=0.0, start=0, end=0.2, step=0.1)
 mi_slider = RangeSlider(start=0.1, end=8.0, value=(0.1, 8.0), step=0.1, title="Initial Mass")
 alpha = Slider(title=r"Fixed Alpha", value=0.6, start=0.0, end=1, step=0.1)
 galpha = Slider(title=r"Gauss Alpha", value=0.0, start=0.0, end=1, step=0.1)
+flalpha = Slider(title=r"Flat Alpha", value=0.0, start=0.0, end=1, step=0.1)
 
 #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -215,7 +235,9 @@ def update_data(attrname, old, new):
     mu_val = float("{:.2f}".format(dmod.value))
     av_val = float("{:.2f}".format(av.value)) 
     alpha_val = float("{:.2f}".format(alpha.value))
-    galpha_val = float("{:.2f}".format(galpha.value))        
+    galpha_val = float("{:.2f}".format(galpha.value))
+    flalpha_val = float("{:.2f}".format(flalpha.value))        
+        
 
     # update CMD data:
     # get current range for initial mass slider:
@@ -225,23 +247,29 @@ def update_data(attrname, old, new):
     data = get_mag_mass(feh_val, vvc_val, bf_val, av_val, lage_val)
     # for the Gaussian dist. model:
     gdata = get_mag_mass(feh_val, 'gauss', bf_val, av_val, lage_val)
+    # for the Flat dist. model:
+    fldata = get_mag_mass(feh_val, 'flat', bf_val, av_val, lage_val)
 
     # re-assign source data...
     # data for single vvc model:
     source.data = dict(x=data[0]['v']-data[0]['i'], y=data[0]['i']+mu_val, 
-                       alpha=[alpha_val]*len(data[0]['i']), c=mass_colors(data[0]['imass']))
+                       alpha=[alpha_val]*len(data[0]['i']), c=mass_colors(data[0]['imass'], 'single'))
     # full data (never but via initial mass):
     fsource.data = dict(x=data[1]['v']-data[1]['i'], y=data[1]['i']+mu_val, 
-                        alpha=[alpha_val]*len(data[1]['i']), c=mass_colors(data[1]['imass']))
+                        alpha=[alpha_val]*len(data[1]['i']), c=mass_colors(data[1]['imass'], 'single'))
     gsource.data = dict(x=gdata[0]['v']-gdata[0]['i'], y=gdata[0]['i']+mu_val, 
-                        alpha=[galpha_val]*len(gdata[0]['i']), c=mass_colors(gdata[0]['imass']))
+                        alpha=[galpha_val]*len(gdata[0]['i']), c=mass_colors(gdata[0]['imass'], 'gauss'))
     gfsource.data = dict(x=gdata[1]['v']-gdata[1]['i'], y=gdata[1]['i']+mu_val, 
-                         alpha=[galpha_val]*len(gdata[1]['i']), c=mass_colors(gdata[1]['imass']))
+                         alpha=[galpha_val]*len(gdata[1]['i']), c=mass_colors(gdata[1]['imass'], 'gauss'))
+    flsource.data = dict(x=fldata[0]['v']-fldata[0]['i'], y=fldata[0]['i']+mu_val, 
+                        alpha=[flalpha_val]*len(gdata[0]['i']), c=mass_colors(fldata[0]['imass'], 'flat'))
+    flfsource.data = dict(x=fldata[1]['v']-fldata[1]['i'], y=fldata[1]['i']+mu_val, 
+                         alpha=[flalpha_val]*len(fldata[1]['i']), c=mass_colors(fldata[1]['imass'], 'flat'))
 #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 # Update param values as widgets change:
-for w in [lage, vvc, feh, bf, av, dmod, alpha, galpha]:
+for w in [lage, vvc, feh, bf, av, dmod, alpha, galpha, flalpha]:
     
     w.on_change('value', update_data)
 
@@ -252,6 +280,6 @@ mi_slider.on_change('value', update_data)
 #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 # Set up layouts and add to document
-inputs = widgetbox(lage, vvc, feh, bf, av, dmod, mi_slider, alpha, galpha)
+inputs = widgetbox(lage, vvc, feh, bf, av, dmod, mi_slider, alpha, galpha, flalpha)
 curdoc().add_root(row(inputs, plot_CMD, width=800))
 curdoc().title = "MATCH Explorer"
